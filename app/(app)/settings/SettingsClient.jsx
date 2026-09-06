@@ -224,6 +224,7 @@ function BackupSection({ notify }) {
 function EmployeesSection({ profiles, currentProfile, notify }) {
   const [showAdd, setShowAdd] = useState(false);
   const [pinTarget, setPinTarget] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
 
   return (
     <>
@@ -241,13 +242,18 @@ function EmployeesSection({ profiles, currentProfile, notify }) {
                 <td><span className="dj-role-badge" style={{ color: 'var(--gold)' }}>{ROLES[p.role]?.label || p.role}</span></td>
                 <td>{p.pin_hash ? <Badge text="Yes" kind="instock" /> : <Badge text="No PIN" kind="low" />}</td>
                 <td>{p.active ? <Badge text="Active" kind="instock" /> : <Badge text="Inactive" kind="out" />}</td>
-                <td><button className="dj-btn dj-btn-sm" onClick={() => setPinTarget(p)}>{p.pin_hash ? 'Reset PIN' : 'Set PIN'}</button></td>
+                <td style={{ display: 'flex', gap: 6 }}>
+                  <button className="dj-btn dj-btn-sm" onClick={() => setEditTarget(p)}>Edit</button>
+                  <button className="dj-btn dj-btn-sm" onClick={() => setPinTarget(p)}>{p.pin_hash ? 'Reset PIN' : 'Set PIN'}</button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </Card>
       {showAdd && <AddEmployeeForm onClose={() => setShowAdd(false)} notify={notify} />}
+      {editTarget && <EditEmployeeForm target={editTarget} currentProfile={currentProfile} onClose={() => setEditTarget(null)} notify={notify} />}
+
       {pinTarget && <SetPinForm target={pinTarget} onClose={() => setPinTarget(null)} notify={notify} />}
     </>
   );
@@ -291,6 +297,50 @@ function AddEmployeeForm({ onClose, notify }) {
       {err && <p className="dj-login-error">{err}</p>}
       <button className="dj-btn dj-btn-gold" style={{ width: '100%', justifyContent: 'center', padding: 10 }} disabled={busy} onClick={submit}>
         {busy ? 'Creating…' : 'Create Employee'}
+      </button>
+    </Modal>
+  );
+}
+
+function EditEmployeeForm({ target, currentProfile, onClose, notify }) {
+  const isSelf = target.id === currentProfile.id;
+  const [fullName, setFullName] = useState(target.full_name || '');
+  const [role, setRole] = useState(target.role);
+  const [active, setActive] = useState(target.active);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const submit = async () => {
+    setErr(null);
+    if (!fullName.trim()) { setErr('Enter a name.'); return; }
+    setBusy(true);
+    const res = await dbUpdate('profiles', target.id, { full_name: fullName.trim(), role, active }, '/settings');
+    setBusy(false);
+    if (!res.ok) { setErr(res.error); return; }
+    notify(`${fullName} updated`);
+    onClose();
+  };
+
+  return (
+    <Modal title={`Edit Employee — ${target.full_name || 'Unnamed'}`} onClose={onClose}>
+      <Field label="Full Name"><input className="dj-input" value={fullName} onChange={e => setFullName(e.target.value)} /></Field>
+      <Field label="Role">
+        <select className="dj-select" value={role} onChange={e => setRole(e.target.value)} disabled={isSelf}>
+          {Object.entries(ROLES).map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}
+        </select>
+      </Field>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 6 }}>
+        <input type="checkbox" checked={active} disabled={isSelf} onChange={e => setActive(e.target.checked)} />
+        Active (unchecking blocks this account from signing in)
+      </label>
+      {isSelf && (
+        <p style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
+          You can't change your own role or deactivate yourself here — ask another administrator to do that, so the shop never ends up with zero active admins.
+        </p>
+      )}
+      {err && <p className="dj-login-error">{err}</p>}
+      <button className="dj-btn dj-btn-gold" style={{ width: '100%', justifyContent: 'center', padding: 10 }} disabled={busy} onClick={submit}>
+        {busy ? 'Saving…' : 'Save Changes'}
       </button>
     </Modal>
   );

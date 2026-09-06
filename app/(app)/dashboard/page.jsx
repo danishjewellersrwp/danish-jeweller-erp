@@ -3,6 +3,7 @@ import { Card, StatCard, Badge, SectionHead } from '@/components/ui';
 import { fmt, fmtW, ratePerGram, priceBreakdown, TOLA_GRAMS, getPurity, todayISO, PURITIES } from '@/lib/pricing';
 import { custBalance, suppBalance } from '@/lib/balances';
 import DashboardCharts from '@/components/DashboardCharts';
+import DashboardHero from '@/components/DashboardHero';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +59,7 @@ export default async function DashboardPage() {
 
   return (
     <div>
+      <DashboardHero />
       <div className="dj-grid g4 dj-section">
         <StatCard label="Today's Sales" value={fmt(todaySales)} />
         <StatCard label="Total Sales (all-time)" value={fmt(monthSales)} />
