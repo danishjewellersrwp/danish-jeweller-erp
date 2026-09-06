@@ -164,3 +164,20 @@ html, body { margin: 0; padding: 0; background: #F7F3EA; }
   .dj-cat-scroll{ grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); gap:10px 6px; }
   .dj-cat-circle{ width:54px; height:54px; }
 }
+
+/* ============================= PIN LOGIN ============================= */
+.dj-staff-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:16px 0 6px 0; max-width:100%; }
+.dj-staff-tile{ display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 8px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid rgba(201,162,78,0.2); cursor:pointer; }
+.dj-staff-tile:hover{ background:rgba(201,162,78,0.12); border-color:rgba(201,162,78,0.5); }
+.dj-staff-avatar{ width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#C9A24E,#8B6A2E); color:#0E1626; font-family:'Cormorant Garamond',serif; font-weight:700; font-size:18px; display:flex; align-items:center; justify-content:center; }
+.dj-staff-name{ color:#EDE9DD; font-size:12px; font-weight:600; text-align:center; }
+.dj-staff-role{ color:#8B93A6; font-size:9.5px; }
+.dj-pin-dots{ display:flex; justify-content:center; gap:12px; margin:18px 0 10px 0; }
+.dj-pin-dot{ width:14px; height:14px; border-radius:50%; border:1.5px solid rgba(201,162,78,0.5); display:inline-block; }
+.dj-pin-dot.filled{ background:var(--gold-light); border-color:var(--gold-light); }
+.dj-pin-pad{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; max-width:260px; margin:10px auto 0 auto; }
+.dj-pin-key{ padding:14px 0; border-radius:10px; background:rgba(255,255,255,0.05); border:1px solid rgba(201,162,78,0.2); color:#EDE9DD; font-size:18px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.dj-pin-key:hover{ background:rgba(201,162,78,0.15); }
+.dj-pin-key-alt{ font-size:12px; color:#9AA1B5; }
+.dj-pin-key:disabled{ opacity:0.5; cursor:default; }
+@media (max-width:480px){ .dj-staff-grid{ grid-template-columns:repeat(2,1fr); } }

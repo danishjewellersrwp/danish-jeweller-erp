@@ -1,13 +1,16 @@
 'use client';
 import { useState, useTransition } from 'react';
 import Image from 'next/image';
-import { Coins, Check } from 'lucide-react';
-import { Card, SectionHead, Field } from '@/components/ui';
+import { Coins, Check, Plus } from 'lucide-react';
+import { Card, SectionHead, Field, Modal, Badge } from '@/components/ui';
 import { fmt, ratePerGram, TOLA_GRAMS, PURITIES } from '@/lib/pricing';
 import { refreshLiveRates, saveManualRates } from '@/app/actions/rates';
 import { dbUpdate } from '@/app/actions/db';
+import { createEmployee, setPin } from '@/app/actions/staff';
+import { exportBackup, restoreBackup } from '@/app/actions/backup';
+import { ROLES } from '@/lib/roles';
 
-export default function SettingsClient({ metalRates, settings, rateHistory }) {
+export default function SettingsClient({ metalRates, settings, rateHistory, profiles, currentProfile }) {
   const [rates, setRates] = useState(metalRates);
   const [biz, setBiz] = useState(settings);
   const [fetching, startFetch] = useTransition();
@@ -103,19 +106,225 @@ export default function SettingsClient({ metalRates, settings, rateHistory }) {
         <button className="dj-btn dj-btn-gold" onClick={saveSettings}>Save Settings</button>
       </Card>
 
-      <SectionHead title="Purity Reference Table" />
-      <Card>
-        <table className="dj-table">
-          <thead><tr><th>Purity</th><th>Metal</th><th>Factor</th><th>Rate / gram</th><th>Rate / tola</th></tr></thead>
-          <tbody>
-            {PURITIES.map(p => (
-              <tr key={p.id}><td style={{ fontWeight: 600 }}>{p.label}</td><td style={{ textTransform: 'capitalize' }}>{p.metal}</td><td>{(p.factor * 100).toFixed(1)}%</td>
-                <td>{fmt(ratePerGram(p.id, rates))}</td><td>{fmt(ratePerGram(p.id, rates) * TOLA_GRAMS)}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
+      {currentProfile?.role === 'admin' && (
+        <BackupSection notify={notify} />
+      )}
+
+      {currentProfile?.role === 'admin' && (
+        <EmployeesSection profiles={profiles} currentProfile={currentProfile} notify={notify} />
+      )}
+
       {toast && <div className="dj-toast"><Check size={15} />{toast}</div>}
     </div>
   );
 }
+
+function BackupSection({ notify }) {
+  const [exporting, setExporting] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [pendingRestore, setPendingRestore] = useState(null);
+  const [confirmText, setConfirmText] = useState('');
+  const fileInputRef = useState(null)[0];
+
+  const doExport = async () => {
+    setExporting(true);
+    const res = await exportBackup();
+    setExporting(false);
+    if (!res.ok) { notify(`Export failed: ${res.error}`); return; }
+    const blob = new Blob([JSON.stringify(res.backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    a.href = url;
+    a.download = `danish-jeweller-backup-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    notify('Backup downloaded');
+  };
+
+  const handleFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        setPendingRestore(parsed);
+        setConfirmText('');
+      } catch {
+        notify('That file is not valid JSON.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const doRestore = async () => {
+    if (confirmText !== 'RESTORE') return;
+    setRestoring(true);
+    const res = await restoreBackup(pendingRestore);
+    setRestoring(false);
+    if (!res.ok) { notify(`Restore failed: ${res.error}`); return; }
+    notify('Data restored — reloading…');
+    setPendingRestore(null);
+    setTimeout(() => window.location.reload(), 1200);
+  };
+
+  return (
+    <>
+      <SectionHead title="Backup & Restore" />
+      <Card style={{ marginBottom: 20 }}>
+        <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 0 }}>
+          Download a complete backup of every business record (customers, products, sales, purchases, expenses, everything except login accounts) as a single JSON file. Keep copies somewhere safe — a shared drive, email to yourself, or Google Drive (see below).
+        </p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button className="dj-btn dj-btn-gold" onClick={doExport} disabled={exporting}>{exporting ? 'Preparing…' : 'Download Backup (.json)'}</button>
+          <label className="dj-btn" style={{ cursor: 'pointer' }}>
+            Restore from Backup File
+            <input type="file" accept="application/json" onChange={handleFile} style={{ display: 'none' }} />
+          </label>
+        </div>
+        <p style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginTop: 10, marginBottom: 0 }}>
+          Restoring completely replaces all current business data with the contents of the file. Login accounts and roles are not affected.
+        </p>
+      </Card>
+
+      <SectionHead title="Google Drive Backup" />
+      <Card style={{ marginBottom: 20 }}>
+        <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 0 }}>
+          Automatic upload to Google Drive needs a one-time setup in Google Cloud Console (creating OAuth credentials for this app) before it can be wired in — that part has to happen on your Google account, not from here. Once you've created those credentials, share the Client ID/Secret and this button will be connected for real.
+        </p>
+        <button className="dj-btn" disabled>Connect Google Drive (setup required)</button>
+      </Card>
+
+      {pendingRestore && (
+        <Modal title="Confirm Restore — This Replaces All Data" onClose={() => setPendingRestore(null)}>
+          <p style={{ fontSize: 13, color: 'var(--danger)', fontWeight: 600 }}>
+            This will permanently delete all current customers, products, sales, purchases, and other business records, and replace them with the contents of the selected file.
+          </p>
+          <p style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+            Backup exported: {pendingRestore.exported_at ? new Date(pendingRestore.exported_at).toLocaleString() : 'unknown'}
+          </p>
+          <Field label='Type RESTORE to confirm'>
+            <input className="dj-input" value={confirmText} onChange={e => setConfirmText(e.target.value)} placeholder="RESTORE" />
+          </Field>
+          <button className="dj-btn dj-btn-danger" style={{ width: '100%', justifyContent: 'center', padding: 10 }}
+            disabled={confirmText !== 'RESTORE' || restoring} onClick={doRestore}>
+            {restoring ? 'Restoring…' : 'Permanently Restore This Backup'}
+          </button>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+
+function EmployeesSection({ profiles, currentProfile, notify }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [pinTarget, setPinTarget] = useState(null);
+
+  return (
+    <>
+      <SectionHead title="Employees" action={<button className="dj-btn dj-btn-gold" onClick={() => setShowAdd(true)}><Plus size={14} /> Add Employee</button>} />
+      <Card style={{ marginBottom: 20 }}>
+        <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 0 }}>
+          Each employee gets a role (matching the permissions built into the database) and a 4–6 digit PIN for fast sign-in at the till. The PIN is hashed and never stored or shown in plain text — if it's forgotten, reset it here.
+        </p>
+        <table className="dj-table">
+          <thead><tr><th>Name</th><th>Role</th><th>PIN Set</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {profiles.map(p => (
+              <tr key={p.id}>
+                <td style={{ fontWeight: 600 }}>{p.full_name || '(unnamed)'}{p.id === currentProfile.id && <span style={{ color: 'var(--ink-soft)', fontWeight: 400 }}> (you)</span>}</td>
+                <td><span className="dj-role-badge" style={{ color: 'var(--gold)' }}>{ROLES[p.role]?.label || p.role}</span></td>
+                <td>{p.pin_hash ? <Badge text="Yes" kind="instock" /> : <Badge text="No PIN" kind="low" />}</td>
+                <td>{p.active ? <Badge text="Active" kind="instock" /> : <Badge text="Inactive" kind="out" />}</td>
+                <td><button className="dj-btn dj-btn-sm" onClick={() => setPinTarget(p)}>{p.pin_hash ? 'Reset PIN' : 'Set PIN'}</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+      {showAdd && <AddEmployeeForm onClose={() => setShowAdd(false)} notify={notify} />}
+      {pinTarget && <SetPinForm target={pinTarget} onClose={() => setPinTarget(null)} notify={notify} />}
+    </>
+  );
+}
+
+function AddEmployeeForm({ onClose, notify }) {
+  const [fullName, setFullName] = useState('');
+  const [role, setRole] = useState('cashier');
+  const [pin, setPinVal] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const submit = async () => {
+    setErr(null);
+    if (!fullName.trim()) { setErr('Enter a name.'); return; }
+    if (!/^\d{4,6}$/.test(pin)) { setErr('PIN must be 4 to 6 digits.'); return; }
+    if (pin !== confirmPin) { setErr('PINs do not match.'); return; }
+    setBusy(true);
+    const res = await createEmployee({ fullName, role, pin, email: email.trim() || undefined });
+    setBusy(false);
+    if (!res.ok) { setErr(res.error); return; }
+    notify(`${fullName} added as ${ROLES[role]?.label}`);
+    onClose();
+  };
+
+  return (
+    <Modal title="Add Employee" onClose={onClose}>
+      <Field label="Full Name"><input className="dj-input" value={fullName} onChange={e => setFullName(e.target.value)} /></Field>
+      <Field label="Role">
+        <select className="dj-select" value={role} onChange={e => setRole(e.target.value)}>
+          {Object.entries(ROLES).map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}
+        </select>
+      </Field>
+      <Field label="Email (optional — used only for account recovery)"><input className="dj-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="leave blank to auto-generate" /></Field>
+      <div className="dj-grid g2">
+        <Field label="PIN (4–6 digits)"><input className="dj-input" type="password" inputMode="numeric" maxLength={6} value={pin} onChange={e => setPinVal(e.target.value.replace(/\D/g, ''))} /></Field>
+        <Field label="Confirm PIN"><input className="dj-input" type="password" inputMode="numeric" maxLength={6} value={confirmPin} onChange={e => setConfirmPin(e.target.value.replace(/\D/g, ''))} /></Field>
+      </div>
+      {err && <p className="dj-login-error">{err}</p>}
+      <button className="dj-btn dj-btn-gold" style={{ width: '100%', justifyContent: 'center', padding: 10 }} disabled={busy} onClick={submit}>
+        {busy ? 'Creating…' : 'Create Employee'}
+      </button>
+    </Modal>
+  );
+}
+
+function SetPinForm({ target, onClose, notify }) {
+  const [pin, setPinVal] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const submit = async () => {
+    setErr(null);
+    if (!/^\d{4,6}$/.test(pin)) { setErr('PIN must be 4 to 6 digits.'); return; }
+    if (pin !== confirmPin) { setErr('PINs do not match.'); return; }
+    setBusy(true);
+    const res = await setPin({ targetProfileId: target.id, pin });
+    setBusy(false);
+    if (!res.ok) { setErr(res.error); return; }
+    notify(`PIN updated for ${target.full_name}`);
+    onClose();
+  };
+
+  return (
+    <Modal title={`${target.pin_hash ? 'Reset' : 'Set'} PIN — ${target.full_name}`} onClose={onClose}>
+      <div className="dj-grid g2">
+        <Field label="New PIN (4–6 digits)"><input className="dj-input" type="password" inputMode="numeric" maxLength={6} value={pin} onChange={e => setPinVal(e.target.value.replace(/\D/g, ''))} autoFocus /></Field>
+        <Field label="Confirm PIN"><input className="dj-input" type="password" inputMode="numeric" maxLength={6} value={confirmPin} onChange={e => setConfirmPin(e.target.value.replace(/\D/g, ''))} /></Field>
+      </div>
+      {err && <p className="dj-login-error">{err}</p>}
+      <button className="dj-btn dj-btn-gold" style={{ width: '100%', justifyContent: 'center', padding: 10 }} disabled={busy} onClick={submit}>
+        {busy ? 'Saving…' : 'Save PIN'}
+      </button>
+    </Modal>
+  );
+}
+

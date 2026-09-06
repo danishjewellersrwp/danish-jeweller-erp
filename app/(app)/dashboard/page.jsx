@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
-import { Card, StatCard, Badge } from '@/components/ui';
-import { fmt, fmtW, ratePerGram, priceBreakdown, TOLA_GRAMS, getPurity, todayISO } from '@/lib/pricing';
+import { Card, StatCard, Badge, SectionHead } from '@/components/ui';
+import { fmt, fmtW, ratePerGram, priceBreakdown, TOLA_GRAMS, getPurity, todayISO, PURITIES } from '@/lib/pricing';
 import { custBalance, suppBalance } from '@/lib/balances';
 import DashboardCharts from '@/components/DashboardCharts';
 
@@ -129,6 +129,21 @@ export default async function DashboardPage() {
                 <span>{x.name}</span><Badge text={`${x.qty} left`} kind={x.qty === 0 ? 'out' : 'low'} />
               </div>
             ))}
+        </Card>
+      </div>
+
+      <div className="dj-section" style={{ marginTop: 20 }}>
+        <SectionHead title="Purity Reference Table" />
+        <Card>
+          <table className="dj-table">
+            <thead><tr><th>Purity</th><th>Metal</th><th>Factor</th><th>Rate / gram</th><th>Rate / tola</th></tr></thead>
+            <tbody>
+              {PURITIES.map(p => (
+                <tr key={p.id}><td style={{ fontWeight: 600 }}>{p.label}</td><td style={{ textTransform: 'capitalize' }}>{p.metal}</td><td>{(p.factor * 100).toFixed(1)}%</td>
+                  <td>{fmt(ratePerGram(p.id, rates))}</td><td>{fmt(ratePerGram(p.id, rates) * TOLA_GRAMS)}</td></tr>
+              ))}
+            </tbody>
+          </table>
         </Card>
       </div>
     </div>
