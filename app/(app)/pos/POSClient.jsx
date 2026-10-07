@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Search, Trash2, Check } from 'lucide-react';
 import { Card } from '@/components/ui';
 import CategoryIcon, { CATEGORY_TILES } from '@/components/CategoryIcon';
-import { fmt, fmtW, priceBreakdown, getPurity } from '@/lib/pricing';
+import { fmt, fmtW, priceBreakdown, ratePerGram, getPurity } from '@/lib/pricing';
 import { createSale, nextInvoiceNumber } from '@/app/actions/sales';
 
 export default function POSClient({ initialProducts, customers, metalRates, settings }) {
@@ -31,21 +31,25 @@ export default function POSClient({ initialProducts, customers, metalRates, sett
         if (existing.qty >= product.qty) { notify(`Only ${product.qty} in stock`); return c; }
         return c.map(i => i.productId === product.id ? { ...i, qty: i.qty + 1 } : i);
       }
-      return [...c, { productId: product.id, qty: 1 }];
+      return [...c, { productId: product.id, qty: 1, rateOverride: null }];
     });
   };
   const removeFromCart = (id) => setCart(c => c.filter(i => i.productId !== id));
   const updateQty = (id, qty) => setCart(c => c.map(i => i.productId === id ? { ...i, qty: Math.max(1, qty) } : i));
+  // Editable per-line rate: pass null/'' to go back to the live market rate for that item.
+  const updateRateOverride = (id, val) => setCart(c => c.map(i => i.productId === id ? { ...i, rateOverride: val === '' ? null : val } : i));
 
   const lineItems = cart.map(ci => {
     const product = products.find(p => p.id === ci.productId);
+    const liveRate = ratePerGram(product.purity_id, metalRates);
     const b = priceBreakdown({
       grossWeight: Number(product.gross_weight), stoneWeight: Number(product.stone_weight), purityId: product.purity_id,
       metalRates, wastageType: product.wastage_type, wastageValue: Number(product.wastage_value),
       makingType: product.making_type, makingValue: Number(product.making_value), stoneValue: Number(product.stone_value),
       otherCharges: Number(product.other_charges), taxPercent: Number(settings?.tax_percent || 0),
+      rateOverride: ci.rateOverride,
     });
-    return { product, qty: ci.qty, breakdown: b, lineTotal: b.total * ci.qty };
+    return { product, qty: ci.qty, breakdown: b, lineTotal: b.total * ci.qty, liveRate, rateOverride: ci.rateOverride };
   });
 
   const subtotal = lineItems.reduce((s, i) => s + i.breakdown.subtotal * i.qty, 0);
@@ -129,15 +133,21 @@ export default function POSClient({ initialProducts, customers, metalRates, sett
           <div style={{ maxHeight: 260, overflowY: 'auto', marginBottom: 10 }}>
             {lineItems.length === 0 && <p style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Cart is empty — click a product to add it.</p>}
             {lineItems.map(li => (
-              <div key={li.product.id} className="dj-cart-item">
-                <div style={{ flex: 1 }}>
+              <div key={li.product.id} className="dj-cart-item" style={{ flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 140 }}>
                   <div style={{ fontWeight: 600 }}>{li.product.name}</div>
-                  <div style={{ color: 'var(--ink-soft)', fontSize: 11 }}>{getPurity(li.product.purity_id).label} · {fmtW(li.breakdown.netWeight)} net · rate {fmt(li.breakdown.rate)}/g</div>
+                  <div style={{ color: 'var(--ink-soft)', fontSize: 11 }}>{getPurity(li.product.purity_id).label} · {fmtW(li.breakdown.netWeight)} net</div>
                 </div>
                 <input type="number" min={1} value={li.qty} onChange={e => updateQty(li.product.id, Number(e.target.value))}
                   style={{ width: 40, marginRight: 8, padding: 3, fontSize: 12, border: '1px solid var(--border)', borderRadius: 5 }} />
                 <div style={{ width: 84, textAlign: 'right', fontWeight: 600 }}>{fmt(li.lineTotal)}</div>
                 <button onClick={() => removeFromCart(li.product.id)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', marginLeft: 6 }}><Trash2 size={14} /></button>
+                <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <span style={{ fontSize: 10.5, color: 'var(--ink-soft)' }}>Rate (market: {fmt(li.liveRate)}/g)</span>
+                  <input type="number" placeholder={String(Math.round(li.liveRate))} value={li.rateOverride ?? ''}
+                    onChange={e => updateRateOverride(li.product.id, e.target.value)}
+                    style={{ width: 90, padding: 3, fontSize: 11, border: '1px solid var(--border)', borderRadius: 5, textAlign: 'right' }} />
+                </div>
               </div>
             ))}
           </div>
