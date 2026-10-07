@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import { Card, SectionHead, Modal, Field } from '@/components/ui';
 import { fmt, fmtW, getPurity, PURITIES, ratePerGram, todayISO } from '@/lib/pricing';
@@ -81,8 +81,12 @@ function PurchaseForm({ suppliers, purchaseCount, metalRates, onClose, onSave })
   const [purityId, setPurityId] = useState('g22');
   const [weight, setWeight] = useState(0);
   const [paid, setPaid] = useState(0);
-  const rate = ratePerGram(purityId, metalRates);
-  const total = Math.round(weight * rate);
+  const liveRate = ratePerGram(purityId, metalRates);
+  const [rate, setRate] = useState(liveRate);
+  // Re-sync the editable rate to the live market rate whenever the metal/purity
+  // changes, so switching purity doesn't leave a stale manually-typed rate behind.
+  useEffect(() => { setRate(liveRate); }, [purityId, metal]);
+  const total = Math.round(weight * Number(rate || 0));
   return (
     <Modal title="New Purchase" onClose={onClose}>
       <Field label="Supplier"><select className="dj-select" value={supplierId} onChange={e => setSupplierId(e.target.value)}>{suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
@@ -91,6 +95,9 @@ function PurchaseForm({ suppliers, purchaseCount, metalRates, onClose, onSave })
         <Field label="Purity"><select className="dj-select" value={purityId} onChange={e => setPurityId(e.target.value)}>{PURITIES.filter(p => p.metal === metal).map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></Field>
         <Field label="Weight (g)"><input type="number" className="dj-input" value={weight} onChange={e => setWeight(e.target.value)} /></Field>
         <Field label="Amount Paid Now"><input type="number" className="dj-input" value={paid} onChange={e => setPaid(e.target.value)} /></Field>
+        <Field label={`Rate (PKR/g) — current market rate: ${fmt(liveRate)}`}>
+          <input type="number" className="dj-input" value={rate} onChange={e => setRate(e.target.value)} />
+        </Field>
       </div>
       <div className="dj-breakdown"><div className="dj-breakdown-row total"><span>Total ({fmt(rate)}/g)</span><span>{fmt(total)}</span></div></div>
       <button className="dj-btn dj-btn-gold" style={{ width: '100%', marginTop: 14, justifyContent: 'center', padding: 10 }}
@@ -111,9 +118,13 @@ function CustomerBuybackForm({ customers, count, metalRates, onClose, onSave }) 
   const [testingResult, setTestingResult] = useState('');
   const [deduction, setDeduction] = useState(3);
   const [paymentMethod, setPaymentMethod] = useState('Cash');
-  const rate = ratePerGram(purityId, metalRates);
+  const liveRate = ratePerGram(purityId, metalRates);
+  const [rate, setRate] = useState(liveRate);
+  // Re-sync the editable rate to the live market rate whenever the metal/purity
+  // changes, so switching purity doesn't leave a stale manually-typed rate behind.
+  useEffect(() => { setRate(liveRate); }, [purityId, metal]);
   const netWeight = Math.max(0, grossWeight - stoneWeight);
-  const finalValue = Math.round(netWeight * rate * (1 - deduction / 100));
+  const finalValue = Math.round(netWeight * Number(rate || 0) * (1 - deduction / 100));
   return (
     <Modal title="Buy Old Jewellery from Customer" onClose={onClose}>
       <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 0 }}>Shop pays the customer for their old jewellery. Recorded as a purchase, not an exchange.</p>
@@ -127,10 +138,14 @@ function CustomerBuybackForm({ customers, count, metalRates, onClose, onSave }) 
         <Field label="Testing Result"><input className="dj-input" value={testingResult} onChange={e => setTestingResult(e.target.value)} /></Field>
         <Field label="Deduction (%)"><input type="number" className="dj-input" value={deduction} onChange={e => setDeduction(e.target.value)} /></Field>
         <Field label="Payment Method"><select className="dj-select" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>{['Cash', 'Bank', 'Online Transfer', 'Cheque'].map(m => <option key={m}>{m}</option>)}</select></Field>
+        <Field label={`Rate (PKR/g) — current market rate: ${fmt(liveRate)}`}>
+          <input type="number" className="dj-input" value={rate} onChange={e => setRate(e.target.value)} />
+        </Field>
       </div>
       <div className="dj-breakdown">
         <div className="dj-breakdown-row"><span>Net weight</span><span>{fmtW(netWeight)}</span></div>
-        <div className="dj-breakdown-row"><span>Rate</span><span>{fmt(rate)}/g</span></div>
+        <div className="dj-breakdown-row"><span>Current market rate</span><span>{fmt(liveRate)}/g</span></div>
+        <div className="dj-breakdown-row"><span>Rate used for this purchase</span><span>{fmt(rate)}/g</span></div>
         <div className="dj-breakdown-row total"><span>Amount payable</span><span>{fmt(finalValue)}</span></div>
       </div>
       <button className="dj-btn dj-btn-gold" style={{ width: '100%', marginTop: 14, justifyContent: 'center', padding: 10 }}
