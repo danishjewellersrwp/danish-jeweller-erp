@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import { Card, SectionHead, Modal, Field } from '@/components/ui';
 import { fmt, fmtW, getPurity, PURITIES, ratePerGram, todayISO } from '@/lib/pricing';
@@ -43,9 +43,13 @@ function OldGoldForm({ customers, metalRates, onClose, onSave }) {
   const [stoneWeight, setStoneWeight] = useState(0);
   const [testingResult, setTestingResult] = useState('');
   const [deduction, setDeduction] = useState(2);
-  const rate = ratePerGram(purityId, metalRates);
+  const liveRate = ratePerGram(purityId, metalRates);
+  const [rate, setRate] = useState(liveRate);
+  // Re-sync the editable rate to the live market rate whenever the metal/purity
+  // changes, so switching purity doesn't leave a stale manually-typed rate behind.
+  useEffect(() => { setRate(liveRate); }, [purityId, metal]);
   const netWeight = Math.max(0, grossWeight - stoneWeight);
-  const finalValue = Math.round(netWeight * rate * (1 - deduction / 100));
+  const finalValue = Math.round(netWeight * Number(rate || 0) * (1 - deduction / 100));
   return (
     <Modal title="Old Gold / Silver Exchange" onClose={onClose}>
       <Field label="Customer"><select className="dj-select" value={customerId} onChange={e => setCustomerId(e.target.value)}>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
@@ -57,10 +61,14 @@ function OldGoldForm({ customers, metalRates, onClose, onSave }) {
         <Field label="Stone Weight (g)"><input type="number" className="dj-input" value={stoneWeight} onChange={e => setStoneWeight(e.target.value)} /></Field>
         <Field label="Testing Result"><input className="dj-input" value={testingResult} onChange={e => setTestingResult(e.target.value)} /></Field>
         <Field label="Deduction (%)"><input type="number" className="dj-input" value={deduction} onChange={e => setDeduction(e.target.value)} /></Field>
+        <Field label={`Rate (PKR/g) — current market rate: ${fmt(liveRate)}`}>
+          <input type="number" className="dj-input" value={rate} onChange={e => setRate(e.target.value)} />
+        </Field>
       </div>
       <div className="dj-breakdown">
         <div className="dj-breakdown-row"><span>Net weight</span><span>{fmtW(netWeight)}</span></div>
-        <div className="dj-breakdown-row"><span>Rate</span><span>{fmt(rate)}/g</span></div>
+        <div className="dj-breakdown-row"><span>Current market rate</span><span>{fmt(liveRate)}/g</span></div>
+        <div className="dj-breakdown-row"><span>Rate used for this exchange</span><span>{fmt(rate)}/g</span></div>
         <div className="dj-breakdown-row total"><span>Exchange value</span><span>{fmt(finalValue)}</span></div>
       </div>
       <button className="dj-btn dj-btn-gold" style={{ width: '100%', marginTop: 14, justifyContent: 'center', padding: 10 }}
