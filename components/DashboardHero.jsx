@@ -1,14 +1,16 @@
+'use client';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ShoppingCart, Gem, Receipt, Users, BarChart3, Settings as SettingsIcon } from 'lucide-react';
+import { useLanguage } from '@/lib/i18n';
 
 const TILES = [
-  { href: '/pos', label: 'POS', icon: ShoppingCart },
-  { href: '/products', label: 'Products', icon: Gem },
-  { href: '/sales', label: 'Sales', icon: Receipt },
-  { href: '/customers', label: 'Customers', icon: Users },
-  { href: '/reports', label: 'Reports', icon: BarChart3 },
-  { href: '/settings', label: 'Settings', icon: SettingsIcon },
+  { href: '/pos', key: 'hero.tiles.pos', label: 'POS', icon: ShoppingCart },
+  { href: '/products', key: 'hero.tiles.products', label: 'Products', icon: Gem },
+  { href: '/sales', key: 'hero.tiles.sales', label: 'Sales', icon: Receipt },
+  { href: '/customers', key: 'hero.tiles.customers', label: 'Customers', icon: Users },
+  { href: '/reports', key: 'hero.tiles.reports', label: 'Reports', icon: BarChart3 },
+  { href: '/settings', key: 'hero.tiles.settings', label: 'Settings', icon: SettingsIcon },
 ];
 
 const NecklaceArt = () => (
@@ -39,16 +41,17 @@ const NecklaceArt = () => (
 );
 
 export default function DashboardHero() {
+  const { t } = useLanguage();
   return (
     <div className="dj-hero">
       <Image src="/logo.png" alt="Danish Jeweller" width={170} height={98} className="dj-hero-logo" priority />
       <NecklaceArt />
-      <p className="dj-hero-tag">Pure Gold, Silver &amp; Diamond</p>
+      <p className="dj-hero-tag">{t('hero.tagline')}</p>
       <div className="dj-tiles">
-        {TILES.map(t => (
-          <Link key={t.href} href={t.href} className="dj-tile">
-            <t.icon size={20} />
-            <span>{t.label}</span>
+        {TILES.map(tile => (
+          <Link key={tile.href} href={tile.href} className="dj-tile">
+            <tile.icon size={20} />
+            <span>{t(tile.key, tile.label)}</span>
           </Link>
         ))}
       </div>

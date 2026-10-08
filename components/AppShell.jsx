@@ -12,6 +12,8 @@ import { createClient } from '@/lib/supabase/client';
 import { ROLES } from '@/lib/roles';
 import { fmt, ratePerGram, TOLA_GRAMS } from '@/lib/pricing';
 import { refreshLiveRates } from '@/app/actions/rates';
+import { useLanguage } from '@/lib/i18n';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
@@ -35,10 +37,11 @@ export default function AppShell({ profile, email, metalRates, children }) {
   const [toast, setToast] = useState(null);
   const pathname = usePathname();
   const router = useRouter();
+  const { lang, t } = useLanguage();
 
   const roleConfig = ROLES[profile.role] || ROLES.readonly;
-  const visibleTabs = TABS.filter(t => roleConfig.tabs.includes(t.id));
-  const activeTab = TABS.find(t => pathname.startsWith(t.href));
+  const visibleTabs = TABS.filter(tab => roleConfig.tabs.includes(tab.id));
+  const activeTab = TABS.find(tab => pathname.startsWith(tab.href));
 
   const logout = async () => {
     const supabase = createClient();
@@ -51,7 +54,7 @@ export default function AppShell({ profile, email, metalRates, children }) {
   const refreshRate = () => {
     startFetch(async () => {
       const res = await refreshLiveRates();
-      notify(res.ok ? 'Live gold & silver rates updated' : `Live fetch failed: ${res.error}`);
+      notify(res.ok ? t('topbar.rateUpdated') : `${t('topbar.rateFailed')}: ${res.error}`);
     });
   };
 
@@ -67,16 +70,16 @@ export default function AppShell({ profile, email, metalRates, children }) {
           <Image src="/logo.png" alt="Danish Jeweller" width={180} height={104} className="dj-brand-logo" priority />
         </div>
         <nav className="dj-nav">
-          {visibleTabs.map(t => (
-            <Link key={t.id} href={t.href} className={`dj-nav-item ${activeTab?.id === t.id ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
-              <t.icon size={16} /><span>{t.label}</span>
+          {visibleTabs.map(tab => (
+            <Link key={tab.id} href={tab.href} className={`dj-nav-item ${activeTab?.id === tab.id ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
+              <tab.icon size={16} /><span>{t(`nav.${tab.id}`, tab.label)}</span>
             </Link>
           ))}
         </nav>
         <div className="dj-sidebar-user">
           <div className="dj-sidebar-user-name">{profile.full_name || email}</div>
           <div className="dj-sidebar-user-role"><span className="dj-role-badge">{roleConfig.label}</span></div>
-          <button className="dj-logout-btn" onClick={logout}><LogOut size={13} /> Log Out</button>
+          <button className="dj-logout-btn" onClick={logout}><LogOut size={13} /> {t('topbar.logout')}</button>
         </div>
       </aside>
       <div className={`dj-backdrop ${sidebarOpen ? 'open' : ''}`} onClick={() => setSidebarOpen(false)} />
@@ -85,28 +88,29 @@ export default function AppShell({ profile, email, metalRates, children }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
             <button className="dj-menu-btn" onClick={() => setSidebarOpen(true)}><Menu size={20} /></button>
             <div style={{ minWidth: 0 }}>
-              <h1>{activeTab?.label || 'Danish Jeweller'}</h1>
-              <p>Danish Jeweller ERP · {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+              <h1>{activeTab ? t(`nav.${activeTab.id}`, activeTab.label) : t('app.name')}</h1>
+              <p>{t('app.erp')} · {new Date().toLocaleDateString(lang === 'ur' ? 'ur-PK' : 'en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <div className="dj-topbar-rates" style={{ display: 'flex', gap: 10 }}>
               <div className="dj-rate-card">
-                <div className="dj-rate-card-head"><Coins size={13} color="#AD8438" /><span>Gold 24K</span></div>
+                <div className="dj-rate-card-head"><Coins size={13} color="#AD8438" /><span>{t('topbar.gold24k')}</span></div>
                 <div className="dj-rate-line"><span>PKR</span><b>{fmt(goldG)}/g</b><b>{fmt(goldT)}/tola</b></div>
                 <div className="dj-rate-line"><span>USD</span><b>${(goldG / usd).toFixed(2)}/g</b><b>${(goldT / usd).toFixed(2)}/tola</b></div>
               </div>
               <div className="dj-rate-card">
-                <div className="dj-rate-card-head"><Coins size={13} color="#8B93A6" /><span>Silver 999</span></div>
+                <div className="dj-rate-card-head"><Coins size={13} color="#8B93A6" /><span>{t('topbar.silver999')}</span></div>
                 <div className="dj-rate-line"><span>PKR</span><b>{fmt(silverG)}/g</b><b>{fmt(silverT)}/tola</b></div>
                 <div className="dj-rate-line"><span>USD</span><b>${(silverG / usd).toFixed(2)}/g</b><b>${(silverT / usd).toFixed(2)}/tola</b></div>
               </div>
               {(roleConfig.tabs.includes('settings') || profile.role === 'manager') && (
                 <button className="dj-btn dj-btn-sm dj-btn-gold" onClick={refreshRate} disabled={fetching} title="Fetch live rates">
-                  <RefreshCw size={13} /> {fetching ? '…' : 'Live'}
+                  <RefreshCw size={13} /> {fetching ? '…' : t('topbar.live')}
                 </button>
               )}
             </div>
+            <LanguageSwitcher />
             <Image src="/logo.png" alt="Danish Jeweller" width={90} height={52} className="dj-topbar-logo" />
           </div>
         </div>
